@@ -11,9 +11,11 @@ This library enables horizontal scaling of message consumption from NATS JetStre
 ### Key Features
 
 - **Partitioned consumption**: Distribute messages across partitions while maintaining order within each partition
+- **Two deployment models**: Static (pre-partitioned streams) and Elastic (dynamic partitioning)
 - **Priority groups**: Use NATS server's priority consumer groups with consumer pinning
 - **High availability**: Multiple instances can run for the same member, with automatic failover
 - **Ordered processing**: Strict ordering guarantees within partitions using `maxAckPending: 1`
+- **Dynamic membership**: Add/remove members at runtime with automatic partition rebalancing
 - **Consumer group management**: Store configuration in NATS KV buckets
 
 ## Architecture
@@ -27,6 +29,16 @@ This library enables horizontal scaling of message consumption from NATS JetStre
 
 Example partitioned subject: `0.events.user.created`, `1.events.user.updated`
 
+### Elastic Consumer Groups
+
+- Work with any existing stream - no pre-partitioning required
+- Create derivative work-queue streams that source from original stream
+- Support dynamic membership changes at runtime
+- Use subject transforms for automatic message partitioning
+- Store config in `elastic-consumer-groups` KV bucket
+
+Example: Original subject `events.user.created` → Partitioned subject `0.events.user.created`
+
 ### Priority Groups and Consumer Pinning
 
 The library leverages NATS server 2.11+ features:
@@ -35,6 +47,11 @@ The library leverages NATS server 2.11+ features:
 - **Automatic Failover**: When the pinned consumer fails, another instance takes over
 
 ## Quick Start
+
+Choose between Static or Elastic consumer groups based on your requirements:
+
+- **Static**: Use when you have pre-partitioned streams and want maximum performance
+- **Elastic**: Use when you want dynamic membership and work with existing streams
 
 ### 1. Add Dependencies
 
@@ -46,7 +63,7 @@ dependencies {
 }
 ```
 
-### 2. Set Up Stream and Consumer Group
+### 2A. Static Consumer Groups - Setup
 
 ```java
 import io.nats.pcgroups.*;
@@ -79,7 +96,33 @@ String configJson = mapper.writeValueAsString(config);
 kv.put("events-stream.my-consumer-group", configJson);
 ```
 
-### 3. Start Consumer
+### 2B. Elastic Consumer Groups - Setup
+
+```java
+// Create original stream (no partitioning needed)
+StreamConfiguration streamConfig = StreamConfiguration.builder()
+    .name("events-stream")
+    .subjects("events.>")
+    .build();
+jsm.addStream(streamConfig);
+
+// Create elastic consumer group with dynamic partitioning
+ElasticConsumerGroupConfig config = ElasticConsumerGroups.createElastic(
+    connection,
+    "events-stream",
+    "my-elastic-group",
+    4,  // 4 partitions
+    "events.>",  // Filter pattern
+    Arrays.asList(1),  // Use first wildcard for partitioning
+    1000,  // Max buffered messages
+    50000  // Max buffered bytes
+);
+
+// Add members to the group
+ElasticConsumerGroups.addMembers(connection, "events-stream", "my-elastic-group", "member1", "member2");
+```
+
+### 3A. Static Consumer - Start Consuming
 
 ```java
 // Consumer configuration
@@ -107,12 +150,40 @@ context.stop();
 context.done().get();
 ```
 
+### 3B. Elastic Consumer - Start Consuming
+
+```java
+// Consumer configuration
+ConsumerConfiguration consumerConfig = ConsumerConfiguration.builder()
+    .ackPolicy(AckPolicy.Explicit)  // Required for elastic consumer groups
+    .maxAckPending(1) // Ensure ordered processing
+    .ackWait(Duration.ofSeconds(10))
+    .build();
+
+// Start consuming
+ConsumerGroupConsumeContext context = ElasticConsumerGroups.elasticConsume(
+    connection,
+    "events-stream",
+    "my-elastic-group",
+    "member1", // Member name
+    message -> {
+        // Process message (subject has partition number stripped)
+        System.out.println("Received: " + message.getSubject() + " - " + new String(message.getData()));
+    },
+    consumerConfig
+);
+
+// Stop when done
+context.stop();
+context.done().get();
+```
+
 ### 4. Publish Messages
 
 ```java
 JetStream js = connection.jetStream();
 
-// Messages will be automatically partitioned by subject transform
+// Messages will be automatically partitioned
 js.publish("events.user.created", "user data".getBytes());
 js.publish("events.order.placed", "order data".getBytes());
 ```
@@ -121,10 +192,17 @@ js.publish("events.order.placed", "order data".getBytes());
 
 ### Core Classes
 
+#### Static Consumer Groups
 - **`StaticConsumerGroups`**: Main entry point for static consumer group operations
+- **`StaticConsumerGroupConfig`**: Configuration for static consumer groups
+
+#### Elastic Consumer Groups
+- **`ElasticConsumerGroups`**: Main entry point for elastic consumer group operations  
+- **`ElasticConsumerGroupConfig`**: Configuration for elastic consumer groups
+
+#### Shared Classes
 - **`ConsumerGroupMsg`**: Message wrapper that strips partition numbers from subjects
 - **`ConsumerGroupConsumeContext`**: Interface for controlling consumption
-- **`StaticConsumerGroupConfig`**: Configuration for static consumer groups
 - **`ConsumerGroupUtils`**: Utility functions including partition filter generation
 
 ### Key Methods
@@ -143,6 +221,51 @@ public static ConsumerGroupConsumeContext staticConsume(
 ```
 
 Joins a static consumer group and starts consuming messages.
+
+#### ElasticConsumerGroups.createElastic()
+
+```java
+public static ElasticConsumerGroupConfig createElastic(
+    Connection connection,
+    String streamName,
+    String consumerGroupName,
+    int maxNumMembers,
+    String filter,
+    List<Integer> partitioningWildcards,
+    long maxBufferedMessages,
+    long maxBufferedBytes
+) throws JetStreamApiException, IOException
+```
+
+Creates a new elastic consumer group with the specified configuration.
+
+#### ElasticConsumerGroups.elasticConsume()
+
+```java
+public static ConsumerGroupConsumeContext elasticConsume(
+    Connection connection,
+    String streamName,
+    String consumerGroupName,
+    String memberName,
+    Consumer<ConsumerGroupMsg> messageHandler,
+    ConsumerConfiguration config
+) throws JetStreamApiException, IOException
+```
+
+Joins an elastic consumer group and starts consuming messages with dynamic membership.
+
+#### ElasticConsumerGroups.addMembers()
+
+```java
+public static void addMembers(
+    Connection connection,
+    String streamName,
+    String consumerGroupName,
+    String... memberNames
+) throws JetStreamApiException, IOException
+```
+
+Adds members to an elastic consumer group with automatic partition rebalancing.
 
 #### ConsumerGroupUtils.generatePartitionFilters()
 
@@ -189,30 +312,64 @@ StaticConsumerGroupConfig config = new StaticConsumerGroupConfig(
 
 ## Examples
 
-See `src/main/java/io/nats/pcgroups/examples/StaticConsumerGroupExample.java` for a complete working example.
+See the complete working examples in `src/main/java/io/nats/pcgroups/examples/`:
+- `StaticConsumerGroupExample.java` - Static consumer groups demo
+- `ElasticConsumerGroupExample.java` - Elastic consumer groups demo
 
-### Running the Example
+### Running Examples with Gradle
 
 1. Start NATS server with JetStream enabled:
    ```bash
    nats-server -js
    ```
 
-2. Set up the demo environment:
+#### Static Consumer Group Example
+
+2. Set up the static demo environment:
    ```bash
-   java -cp ... StaticConsumerGroupExample setup
+   gradle runStaticSetup
    ```
 
 3. Start consumers in separate terminals:
    ```bash
-   java -cp ... StaticConsumerGroupExample nats://localhost:4222 member1
-   java -cp ... StaticConsumerGroupExample nats://localhost:4222 member2
+   gradle runStaticConsume1  # Terminal 1
+   gradle runStaticConsume2  # Terminal 2
    ```
 
 4. Publish test messages:
    ```bash
-   java -cp ... StaticConsumerGroupExample publish
+   gradle runStaticPublish
    ```
+
+#### Elastic Consumer Group Example
+
+2. Set up the elastic demo environment:
+   ```bash
+   gradle runElasticSetup
+   ```
+
+3. Add members to the consumer group:
+   ```bash
+   gradle runElasticAdd
+   ```
+
+4. Start consumers in separate terminals:
+   ```bash
+   gradle runElasticConsume1  # Terminal 1
+   gradle runElasticConsume2  # Terminal 2
+   ```
+
+5. Publish test messages:
+   ```bash
+   gradle runElasticPublish
+   ```
+
+6. Check consumer group status:
+   ```bash
+   gradle runElasticStatus
+   ```
+
+See [RUNNING_EXAMPLES.md](RUNNING_EXAMPLES.md) for detailed instructions and available commands.
 
 ## Testing
 

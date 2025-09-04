@@ -29,89 +29,191 @@ This guide shows how to run the various examples and demos included with the Jav
 
 ## Available Examples and Tasks
 
-### 1. 🛠️ Setup Demo Environment
+This library includes two types of consumer groups with separate example sets:
 
-**Purpose**: Creates the stream, KV bucket, and consumer group configuration
+## 📊 Static Consumer Groups Examples
+
+Static consumer groups require pre-partitioned streams and offer maximum performance.
+
+### 1. 🛠️ Setup Static Demo Environment
 
 ```bash
-gradle runSetup
+gradle runStaticSetup
 ```
 
 **What it does**:
-- Deletes any existing demo resources
 - Creates `demo-partitioned-stream` with subject transform `events.> → {{partition(4,events.>)}}.events.>`
 - Creates `static-consumer-groups` KV bucket
-- Stores consumer group config with 2 members (`member1`, `member2`) across 4 partitions
+- Stores consumer group config with 2 members across 4 partitions
 
-**Output**:
-```
-NATS Partitioned Consumer Groups Demo
-====================================
-Connecting to NATS at: nats://localhost:4222
-
-Setting up demo environment...
-Creating partitioned stream: demo-partitioned-stream
-Creating KV bucket for consumer group configs
-Creating consumer group configuration
-
-Setup complete!
-```
-
-### 2. 📤 Publish Test Messages
-
-**Purpose**: Publishes sample messages that will be automatically partitioned
+### 2. 📤 Publish Static Test Messages
 
 ```bash
-gradle runPublish
+gradle runStaticPublish
 ```
 
 **What it does**:
-- Publishes 20 messages across different subjects (`events.user.created`, `events.order.placed`, etc.)
+- Publishes 20 messages across different subjects
 - Messages are automatically partitioned by the stream's subject transform
-- Each message gets assigned to partitions 0-3 based on subject hash
 
-**Output**:
-```
-Publishing test messages...
-Published: Message 0 for events.user.created (seq: 1)
-Published: Message 1 for events.user.updated (seq: 2)
-...
-Finished publishing messages
-```
-
-### 3. 👥 Start Consumer Members
-
-**Purpose**: Start consumer group members to process partitioned messages
+### 3. 👥 Start Static Consumer Members
 
 #### Member 1
 ```bash
-gradle runMember1
+gradle runStaticConsume1
 ```
 
 #### Member 2
 ```bash
-gradle runMember2
+gradle runStaticConsume2
 ```
-
-**What they do**:
-- Join the `demo-consumer-group` as the specified member
-- Automatically get assigned their share of partitions
-- Process messages with strict ordering within partitions
-- Display received messages with partition info stripped
 
 **Output**:
 ```
-NATS Partitioned Consumer Groups Demo
-====================================
-Connecting to NATS at: nats://localhost:4222
-Member name: member1
-
+NATS Static Consumer Groups Demo
+================================
 Starting consumer for member: member1
 Consumer started. Press ENTER to stop...
+[member1] Message 1: events.user.created - Message 0 for events.user.created
+...
+```
+
+## 🚀 Elastic Consumer Groups Examples
+
+Elastic consumer groups work with any existing stream and support dynamic membership.
+
+### 1. 🛠️ Setup Elastic Demo Environment
+
+```bash
+gradle runElasticSetup
+```
+
+**What it does**:
+- Creates `demo-elastic-stream` (no pre-partitioning required)
+- Creates work-queue stream `demo-elastic-stream-cg-demo-elastic-cg` 
+- Sets up automatic subject transforms for partitioning
+- Creates `elastic-consumer-groups` KV bucket
+
+**Output**:
+```
+NATS Elastic Consumer Groups Demo
+=================================
+Command: setup
+
+Setting up elastic consumer group demo...
+Creating original stream: demo-elastic-stream
+Creating elastic consumer group: demo-elastic-cg
+Elastic consumer group created with config:
+  Max members: 4
+  Filter: events.>
+  Partitioning wildcards: [1]
+Setup complete!
+```
+
+### 2. 👥 Add Members to Elastic Group
+
+```bash
+gradle runElasticAdd
+```
+
+**What it does**:
+- Adds `member1` and `member2` to the elastic consumer group
+- Automatically assigns partitions and rebalances workload
+- Updates configuration in KeyValue store
+
+**Output**:
+```
+Adding members to elastic consumer group...
+=== Consumer Group Status ===
+Consumer Group: demo-elastic-cg
+Max Members: 4
+Current Members: [member1, member2]
+Partition Assignments:
+  member1: [0.>, 1.>]
+  member2: [2.>, 3.>]
+```
+
+### 3. 📤 Publish Elastic Test Messages
+
+```bash
+gradle runElasticPublish
+```
+
+**What it does**:
+- Publishes 20 messages to subjects like `events.user.created`, `events.order.placed`
+- Messages are automatically transformed to partitioned subjects like `0.events.user.created`
+- Work-queue stream receives the partitioned messages
+
+### 4. 🎯 Start Elastic Consumers
+
+#### Member 1
+```bash
+gradle runElasticConsume1
+```
+
+#### Member 2  
+```bash
+gradle runElasticConsume2
+```
+
+**What they do**:
+- Join the elastic consumer group as the specified member
+- Use pull-based batch processing for efficient message consumption
+- Process only messages from their assigned partitions
+- Automatically handle membership changes and rebalancing
+
+**Output**:
+```
+NATS Elastic Consumer Groups Demo
+=================================
+Command: consume
+
+Starting elastic consumer for member: member1
+Consumer started for member: member1
+Running for 30 seconds... Press ENTER to stop early
 [member1] Message 1: events.user.created - Message 0 for events.user.created
 [member1] Message 2: events.order.placed - Message 2 for events.order.placed
 ...
 ```
+
+### 5. 📊 Check Elastic Consumer Group Status
+
+```bash
+gradle runElasticStatus
+```
+
+**What it does**:
+- Shows current consumer group configuration
+- Lists all members and their partition assignments  
+- Displays stream information and message counts
+
+**Output**:
+```
+=== Consumer Group Status ===
+Consumer Group: demo-elastic-cg
+Original Stream: demo-elastic-stream  
+Work-queue Stream: demo-elastic-stream-cg-demo-elastic-cg
+Max Members: 4
+Filter: events.>
+Current Members: [member1, member2]
+Member Count: 2
+
+Partition Assignments:
+  member1: [0.>, 1.>] 
+  member2: [2.>, 3.>]
+```
+
+### 6. 🧹 Cleanup Elastic Resources
+
+```bash
+gradle runElasticCleanup
+```
+
+**What it does**:
+- Removes the elastic consumer group configuration
+- Deletes the work-queue stream
+- Deletes the original stream
+- Cleans up KV bucket entries
 
 ### 4. 🔍 Debug and Inspection Tools
 
@@ -145,59 +247,110 @@ gradle runFromStart
 ```
 **Purpose**: Creates a consumer that reads all messages from the beginning of the stream
 
-## 🎯 Complete Demo Walkthrough
+## 🎯 Complete Demo Walkthroughs
 
-Here's how to run a complete demonstration:
+### Static Consumer Groups Demo
 
-### Step 1: Setup
+Here's how to run a complete static consumer group demonstration:
+
+#### Step 1: Setup
 ```bash
-# Clean setup
-gradle runSetup
+gradle runStaticSetup
 ```
 
-### Step 2: Publish Messages
+#### Step 2: Publish Messages  
 ```bash
-# Publish test data
-gradle runPublish
+gradle runStaticPublish
 ```
 
-### Step 3: Start Consumers (in separate terminals)
+#### Step 3: Start Consumers (in separate terminals)
 
 **Terminal 1:**
 ```bash
-gradle runMember1
+gradle runStaticConsume1
 # Wait for "Consumer started. Press ENTER to stop..."
 ```
 
 **Terminal 2:**
 ```bash
-gradle runMember2
+gradle runStaticConsume2
 # Wait for "Consumer started. Press ENTER to stop..."
 ```
 
-### Step 4: Observe Partitioned Consumption
-- Each member will receive messages from their assigned partitions
-- Member1 typically gets partitions 0,1 (subjects that hash to these partitions)
-- Member2 typically gets partitions 2,3 (subjects that hash to these partitions)
+### Elastic Consumer Groups Demo
+
+Here's how to run a complete elastic consumer group demonstration:
+
+#### Step 1: Setup
+```bash
+gradle runElasticSetup
+```
+
+#### Step 2: Add Members
+```bash
+gradle runElasticAdd
+```
+
+#### Step 3: Start Consumers (in separate terminals)
+
+**Terminal 1:**
+```bash
+gradle runElasticConsume1
+# Runs for 30 seconds or until ENTER pressed
+```
+
+**Terminal 2:**
+```bash
+gradle runElasticConsume2  
+# Runs for 30 seconds or until ENTER pressed
+```
+
+#### Step 4: Publish Messages
+```bash
+# While consumers are running
+gradle runElasticPublish
+```
+
+#### Step 5: Check Status
+```bash
+gradle runElasticStatus
+```
+
+#### Step 6: Test Dynamic Membership
+```bash
+# Add more members while consumers are running
+gradle runElasticAdd member3 member4
+
+# Check how partitions are rebalanced
+gradle runElasticStatus
+
+# Remove members
+gradle runElasticRemove member3 member4
+```
+
+### Common Features Demonstrated
+
+#### Partitioned Consumption
+- Each member receives messages from their assigned partitions
+- Member1 typically gets partitions 0,1; Member2 gets partitions 2,3
 - Messages within each partition are processed in strict order
 
-### Step 5: Test High Availability
-- Kill one of the consumer processes (Ctrl+C)
+#### High Availability Testing
+- Kill one consumer process (Ctrl+C) 
 - Start multiple instances of the same member:
   ```bash
   # Start multiple member1 instances in different terminals
-  gradle runMember1  # Terminal 1
-  gradle runMember1  # Terminal 2
-  gradle runMember1  # Terminal 3
+  gradle runElasticConsume1  # Terminal 1
+  gradle runElasticConsume1  # Terminal 2  
+  gradle runElasticConsume1  # Terminal 3
   ```
 - Observe that only one instance receives messages (consumer pinning)
 - Kill the active instance and watch failover to another instance
 
-### Step 6: Cleanup
-```bash
-# Stop all consumers (press ENTER in each terminal)
-# The setup task will clean up automatically on next run
-```
+#### Pull-Based Batch Processing (Elastic Only)
+- Consumers use `subscription.pull()` to request batches of up to 10 messages
+- More efficient than single-message pulling
+- Reduces network round trips and improves throughput
 
 ## 🐛 Troubleshooting
 
@@ -240,26 +393,65 @@ Member    Count    Original Subject          Message Content
 - Messages are assigned to partitions based on subject hash
 
 ### Consumer Group Features Demonstrated
+
+#### Static Consumer Groups
+- ✅ **Pre-partitioned streams**: Maximum performance with subject transforms
+- ✅ **Immutable configuration**: Stable partition assignments
+- ✅ **Direct partitioning**: Messages routed to partitions at publish time
+
+#### Elastic Consumer Groups  
+- ✅ **Dynamic membership**: Add/remove members at runtime
+- ✅ **Work-queue streams**: Automatic derivative stream creation
+- ✅ **Pull-based batching**: Efficient message consumption with `pull()` API
+- ✅ **Real-time rebalancing**: Partition reassignment on membership changes
+
+#### Common Features (Both Types)
 - ✅ **Partitioned consumption**: Messages split across members
 - ✅ **Ordered processing**: Strict order within each partition  
 - ✅ **High availability**: Multiple instances, only one active
 - ✅ **Consumer pinning**: Automatic failover between instances
-- ✅ **Subject transform**: Automatic partitioning of published messages
+- ✅ **Subject transforms**: Automatic partitioning of published messages
+- ✅ **Priority groups**: NATS server 2.11+ priority consumer features
 
 ## 🔧 Customization
 
 ### Change Member Names
+
+#### Static Consumer Groups
+```bash  
+# Use custom member names (edit StaticConsumerGroupExample.java)
+gradle runStaticConsume1 -Pargs="custom-member-1"
+gradle runStaticConsume2 -Pargs="custom-member-2"
+```
+
+#### Elastic Consumer Groups  
 ```bash
-# Use custom member names
-gradle runMember1 -Pargs="nats://localhost:4222,custom-member-1"
-gradle runMember2 -Pargs="nats://localhost:4222,custom-member-2"
+# Add custom members
+gradle runElasticAdd custom-member-1 custom-member-2
+
+# Start consumers with custom names
+gradle runElasticConsume1 -Pargs="consume,custom-member-1"
+gradle runElasticConsume2 -Pargs="consume,custom-member-2"
 ```
 
 ### Use Different NATS Server
 Edit the examples to change the default URL from `nats://localhost:4222` to your server URL.
 
 ### Modify Partition Count
-Edit `StaticConsumerGroupExample.java` and change the `maxMembers` parameter in the configuration.
+- **Static**: Edit `StaticConsumerGroupExample.java` and change the `maxMembers` parameter
+- **Elastic**: Edit `ElasticConsumerGroupExample.java` and modify the partition count in `createElastic()`
 
 ### Add More Members
-Edit the consumer group configuration in `setupDemo()` to include additional members in the `members` list.
+- **Static**: Edit the consumer group configuration in `setupDemo()` to include additional members
+- **Elastic**: Use `gradle runElasticAdd member3 member4 member5` to dynamically add members
+
+### Performance Tuning
+
+#### Batch Size (Elastic Only)
+Edit `ElasticConsumerGroups.java` and modify the batch size in `PullRequestOptions.builder(10)` to adjust how many messages are fetched at once.
+
+#### Buffer Limits (Elastic Only)  
+Adjust `maxBufferedMessages` and `maxBufferedBytes` parameters in `createElastic()` to control work-queue stream resource usage.
+
+#### ACK Wait Times
+Modify `ackWait` in the `ConsumerConfiguration` to adjust how long to wait for message acknowledgments.
