@@ -1,0 +1,164 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'application'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    // Use the NATS Java client from the local nats.java build
+    implementation files('../nats.java/build/libs/jnats-2.22.0-SNAPSHOT.jar')
+    
+    // Jackson for JSON processing
+    implementation 'com.fasterxml.jackson.core:jackson-core:2.15.2'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+    implementation 'com.fasterxml.jackson.core:jackson-annotations:2.15.2'
+    
+    // Testing
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.9.3'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+jar {
+    archiveBaseName = 'pcgroups-java'
+    archiveVersion = '0.1.0-SNAPSHOT'
+}
+
+application {
+    mainClass = 'io.nats.pcgroups.examples.StaticConsumerGroupExample'
+}
+
+task runSetup(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.StaticConsumerGroupExample'
+    args = []
+}
+
+task runPublish(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.StaticConsumerGroupExample' 
+    args = ['publish']
+}
+
+task runMember1(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.StaticConsumerGroupExample'
+    args = ['nats://localhost:4222', 'member1']
+}
+
+task runMember2(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.StaticConsumerGroupExample'
+    args = ['nats://localhost:4222', 'member2']
+}
+
+task runQuickTest(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.QuickConsumerTest'
+}
+
+task runDebug(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.DebugStream'
+}
+
+task runInspect(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.InspectMessages'
+}
+
+task runSimpleCheck(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.SimpleStreamCheck'
+}
+
+task runFromStart(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.ReceiveFromStart'
+}
+
+// Elastic Consumer Group Tasks
+task runElasticSetup(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.ElasticConsumerGroupExample'
+    args = ['setup']
+}
+
+task runElasticPublish(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.ElasticConsumerGroupExample'
+    args = ['publish']
+}
+
+task runElasticStatus(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.ElasticConsumerGroupExample'
+    args = ['status']
+}
+
+task runElasticDebug(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.ElasticConsumerGroupExample'
+    args = ['debug']
+}
+
+task runElasticConsume1(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.ElasticConsumerGroupExample'
+    args = ['consume', 'member1']
+    standardInput = System.in
+}
+
+task runElasticConsume2(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.ElasticConsumerGroupExample'
+    args = ['consume', 'member2']
+    standardInput = System.in
+}
+
+task runElasticAdd(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.ElasticConsumerGroupExample'
+    args = ['add', 'member1', 'member2']
+}
+
+task runElasticCleanup(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'io.nats.pcgroups.examples.ElasticConsumerGroupExample'
+    args = ['cleanup']
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+            
+            pom {
+                name = 'NATS Partitioned Consumer Groups for Java'
+                description = 'Java implementation of partitioned consumer groups for NATS JetStream'
+                url = 'https://github.com/synadia-io/orbit.go'
+                
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+            }
+        }
+    }
+}
