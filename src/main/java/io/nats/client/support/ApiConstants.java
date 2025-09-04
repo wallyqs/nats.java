@@ -162,6 +162,7 @@ public interface ApiConstants {
     String PORT              = "port";
     String PRIORITY_GROUPS   = "priority_groups";
     String PRIORITY_POLICY   = "priority_policy";
+    String PRIORITY_TIMEOUT  = "priority_timeout";
     String PROCESSING_TIME   = "processing_time";
     String PROTO             = "proto";
     String PURGED            = "purged";

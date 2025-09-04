@@ -91,6 +91,7 @@ public class ConsumerConfiguration implements JsonSerializable {
     protected final List<String> filterSubjects;
     protected final List<String> priorityGroups;
     protected final PriorityPolicy priorityPolicy;
+    protected final Duration pinnedTTL;
 
     protected ConsumerConfiguration(ConsumerConfiguration cc) {
         this.deliverPolicy = cc.deliverPolicy;
@@ -124,6 +125,7 @@ public class ConsumerConfiguration implements JsonSerializable {
         this.filterSubjects = cc.filterSubjects == null ? null : new ArrayList<>(cc.filterSubjects);
         this.priorityGroups = cc.priorityGroups == null ? null : new ArrayList<>(cc.priorityGroups);
         this.priorityPolicy = cc.priorityPolicy;
+        this.pinnedTTL = cc.pinnedTTL;
     }
 
     // For the builder
@@ -165,6 +167,7 @@ public class ConsumerConfiguration implements JsonSerializable {
 
         this.priorityGroups = b.priorityGroups;
         this.priorityPolicy = b.priorityPolicy;
+        this.pinnedTTL = b.pinnedTTL;
     }
 
     /**
@@ -215,6 +218,7 @@ public class ConsumerConfiguration implements JsonSerializable {
         if (priorityPolicy != null && priorityPolicy != DEFAULT_PRIORITY_POLICY) {
             JsonUtils.addField(sb, PRIORITY_POLICY, priorityPolicy.toString());
         }
+        JsonUtils.addFieldAsNanos(sb, PRIORITY_TIMEOUT, pinnedTTL);
         return endJson(sb).toString();
     }
 
@@ -506,6 +510,16 @@ public class ConsumerConfiguration implements JsonSerializable {
     }
 
     /**
+     * Gets the pinned TTL (time-to-live) for this consumer configuration.
+     * Used with PriorityPolicyPinned to specify how long a consumer stays pinned to a client.
+     * @return the pinned TTL duration.
+     */
+    @Nullable
+    public Duration getPinnedTTL() {
+        return pinnedTTL;
+    }
+
+    /**
      * Gets whether deliver policy of this consumer configuration was set or left unset
      * @return true if the policy was set, false if the policy was not set
      */
@@ -642,6 +656,14 @@ public class ConsumerConfiguration implements JsonSerializable {
     }
 
     /**
+     * Gets whether pinned TTL for this consumer configuration was set or left unset
+     * @return true if pinned TTL was set by the user
+     */
+    public boolean pinnedTTLWasSet() {
+        return pinnedTTL != null;
+    }
+
+    /**
      * Creates a builder for the options.
      * @return a publish options builder
      */
@@ -703,6 +725,7 @@ public class ConsumerConfiguration implements JsonSerializable {
 
         private List<String> priorityGroups;
         private PriorityPolicy priorityPolicy;
+        private Duration pinnedTTL;
 
         /**
          * Construct the builder
@@ -760,6 +783,7 @@ public class ConsumerConfiguration implements JsonSerializable {
                     this.priorityGroups = new ArrayList<>(cc.priorityGroups);
                 }
                 this.priorityPolicy = cc.priorityPolicy;
+                this.pinnedTTL = cc.pinnedTTL;
             }
         }
 
@@ -843,6 +867,7 @@ public class ConsumerConfiguration implements JsonSerializable {
 
             priorityGroups(readOptionalStringList(jsonValue, PRIORITY_GROUPS));
             priorityPolicy(PriorityPolicy.get(readString(jsonValue, PRIORITY_POLICY)));
+            pinnedTTL(readNanos(jsonValue, PRIORITY_TIMEOUT));
 
             return this;
         }
@@ -1402,6 +1427,28 @@ public class ConsumerConfiguration implements JsonSerializable {
          */
         public Builder priorityPolicy(PriorityPolicy policy) {
             this.priorityPolicy = policy;
+            return this;
+        }
+
+        /**
+         * Sets the pinned TTL (time-to-live) for the ConsumerConfiguration.
+         * Used with PriorityPolicyPinned to specify how long a consumer stays pinned to a client.
+         * @param pinnedTTL the pinned TTL duration
+         * @return Builder
+         */
+        public Builder pinnedTTL(Duration pinnedTTL) {
+            this.pinnedTTL = normalize(pinnedTTL);
+            return this;
+        }
+
+        /**
+         * Sets the pinned TTL (time-to-live) for the ConsumerConfiguration.
+         * Used with PriorityPolicyPinned to specify how long a consumer stays pinned to a client.
+         * @param pinnedTTLMillis the pinned TTL duration in milliseconds
+         * @return Builder
+         */
+        public Builder pinnedTTL(long pinnedTTLMillis) {
+            this.pinnedTTL = normalizeDuration(pinnedTTLMillis);
             return this;
         }
 

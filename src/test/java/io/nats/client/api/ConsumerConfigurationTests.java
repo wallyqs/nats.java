@@ -72,6 +72,7 @@ public class ConsumerConfigurationTests extends TestBase {
             .metadata(metadata)
             .priorityGroups("pgroup1", "pgroup2")
             .priorityPolicy(PriorityPolicy.Overflow)
+            .pinnedTTL(Duration.ofSeconds(30))
             ;
 
         ConsumerConfiguration c = builder.build();
@@ -297,6 +298,8 @@ public class ConsumerConfigurationTests extends TestBase {
         assertEquals(2, c.getPriorityGroups().size());
         assertTrue(c.getPriorityGroups().contains("pgroup1"));
         assertTrue(c.getPriorityGroups().contains("pgroup2"));
+        assertEquals(Duration.ofSeconds(30), c.getPinnedTTL());
+        assertTrue(c.pinnedTTLWasSet());
     }
 
     @Test
@@ -483,6 +486,49 @@ public class ConsumerConfigurationTests extends TestBase {
         cc = ConsumerConfiguration.builder().json(hbOnly).build();
         assertFalse(cc.isFlowControl());
         assertEquals(Duration.ofMillis(5678), cc.getIdleHeartbeat());
+    }
+
+    @Test
+    public void testConsumerPinning() {
+        // Test pinnedTTL builder methods
+        ConsumerConfiguration cc = ConsumerConfiguration.builder()
+            .priorityPolicy(PriorityPolicy.PinnedClient)
+            .pinnedTTL(Duration.ofSeconds(60))
+            .build();
+        
+        assertEquals(PriorityPolicy.PinnedClient, cc.getPriorityPolicy());
+        assertEquals(Duration.ofSeconds(60), cc.getPinnedTTL());
+        assertTrue(cc.pinnedTTLWasSet());
+        
+        // Test with milliseconds
+        cc = ConsumerConfiguration.builder()
+            .priorityPolicy(PriorityPolicy.PinnedClient)
+            .pinnedTTL(30000) // 30 seconds in millis
+            .build();
+            
+        assertEquals(Duration.ofSeconds(30), cc.getPinnedTTL());
+        
+        // Test JSON serialization includes priority_timeout
+        String json = cc.toJson();
+        assertTrue(json.contains("\"priority_policy\":\"pinned_client\""));
+        assertTrue(json.contains("\"priority_timeout\":"));
+        
+        // Test JSON parsing
+        String jsonWithPinnedTTL = "{\"deliver_policy\":\"all\",\"ack_policy\":\"explicit\",\"replay_policy\":\"instant\",\"priority_policy\":\"pinned_client\",\"priority_timeout\":45000000000}";
+        try {
+            cc = ConsumerConfiguration.builder().json(jsonWithPinnedTTL).build();
+            assertEquals(PriorityPolicy.PinnedClient, cc.getPriorityPolicy());
+            assertEquals(Duration.ofSeconds(45), cc.getPinnedTTL());
+        } catch (Exception e) {
+            fail("JSON parsing failed: " + e.getMessage());
+        }
+        
+        // Test without pinnedTTL
+        cc = ConsumerConfiguration.builder()
+            .priorityPolicy(PriorityPolicy.None)
+            .build();
+        assertNull(cc.getPinnedTTL());
+        assertFalse(cc.pinnedTTLWasSet());
     }
 }
 
