@@ -182,6 +182,11 @@ public class NatsMessage implements Message {
         return controlLineLength;
     }
 
+    int getPayloadSize() {
+        calculate();
+        return headerLen + dataLen;
+    }
+
     /**
      * @param destPosition the position index in destination byte array to start
      * @param dest is the byte array to write to
