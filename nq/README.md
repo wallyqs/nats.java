@@ -142,7 +142,7 @@ usual IR → vectors → shell route.
 - **Object Store:**
   - `putFile` names the object by its full path in NQ, by the file name in jnats;
   - `list()` on an empty store throws `NO_OBJECTS_FOUND` in NQ and returns an empty list in jnats.
-- **Service handlers:** when a handler throws, jnats replies with a 500 error (`service/EndpointContext.java:83-89`). NQ `Micro.request` (Micro.java:574-585) neither replies nor counts the error.
+- **Service handlers:** when a handler throws, jnats replies with a 500 error (`service/EndpointContext.java:83-89`), counts it and keeps serving. NQ now does the same (see §5.2), except that it sends no second reply when the handler had already responded. The 500's description is the exception's message (jnats sends `toString()`).
 
 ## 4. Where NQ Java is ahead of jnats
 
@@ -150,13 +150,17 @@ usual IR → vectors → shell route.
 - Typed message-scheduling publish options (`withSchedule*`), publish retry and stall options, and async publish limits.
 - `createOrUpdateStream`, `streamNameBySubject`, push-consumer management, `termWithReason`, and `Stream.unpinConsumer`.
 
-## 5. Problems found in nq.dev along the way
+## 5. Problems found in nq.dev, now fixed
 
-1. **Fast-batch error codes.** NQ's `ir/jetstream-batch.nqir:189-192` copies orbit.go `jetstreamext/errors.go:35-38`, which uses 10203–10206. jnats (`support/NatsJetStreamConstants.java:205-208`) and NASIR's nats-server model (`wallyqs/nasir: ir/natsserver/jsapi.nasir:5345`) both use 10205–10208. 10203 and 10204 also collide with nats.go's `JSErrCodeScheduleSourceInvalid` and `JSErrCodeConsumerInvalidReset` (`ir/jetstream-api.nqir:333-334`). The oracle itself looks wrong here; a live server should decide.
-2. **Service handler exceptions.** These are not answered or counted (§3). nats.go micro sends no error reply either, so NQ matches its oracle, but a jnats facade has to add the 500 reply.
-3. **Stale capability manifests.** `ir/capabilities/jetstream/java.{nio,threaded}.json` marks roughly 270 of the in-scope `planned` symbols as missing, but they exist in `JetStream.java`. They include records and fields, enums, `JSErrCode*`, option functions, pause/resume/reset, listers, consumption types and the J6/J7 KV/OS types. The reason text still reads "J4/J5/J6/J7 awaiting IR", although the plan records those milestones as landed.
+All three are fixed on `wallyqs/nq.dev` branch `claude/blissful-shannon-znjm2g` (`fc1ef2c`).
 
-   Part of this is deliberate: record types and fields stay `planned` (`docs/JETSTREAM-PLAN.md:870-872`, `packages/java/JetStream.md:865-869`). But about 52 symbols that `go.native` already marks implemented, such as `PauseConsumer`, `ResetConsumer`, the listers, `WithPurge*` and `JSErrCode*`, should be promoted for Java. Likewise, 22–26 orbit batch-publishing entries in `orbit/java.nio.json` are `planned` but implemented. The per-report "stale manifest" sections list each entry.
+1. **Fast-batch error codes (bug, fixed).** NQ copied orbit.go `jetstreamext/errors.go:35-38`, which assigns 10203–10206 to the fast-batch errors. nats-server's own codes are 10205–10208 (`server/errors.json`, `JSBatchPublish*Err`, v2.14.0 and v2.15.0); 10203 and 10204 are its message-schedule and consumer-reset errors. Measured on nats-server v2.15.0: a fast batch to a stream without `allow_batched` is refused with err_code 10205 "batch publish is disabled", and orbit.go's `errors.Is` reports it as `ErrFastBatchInvalidID`. NQ now uses the server's codes in all twelve profiles, recorded as a declared divergence from orbit.go. jnats (`support/NatsJetStreamConstants.java:205-208`) already agrees with the server.
+2. **Service handler exceptions (fixed).** This report first said NQ "neither replies nor counts the error". Running the old code shows it was worse: the exception reached the connection's async error handler, whose service wrapper counted an error and **stopped the whole service**. NQ now answers jnats-style in Java, Python, Ruby and TypeScript, through new IR roots `svc_handler_failed` and `svc_responded`. The 500 error response carries the failure's text, or "handler failed" when there is none. The request counts as one error recording `500:<text>`, and the service keeps serving. Go and Rust handlers still panic, as in nats.go, and a C handler cannot fail. `TestServicesHandlerFailure` checks this live on the seven profiles.
+3. **Capability manifests (overstated here; reason text fixed).** The JetStream reports below say roughly 270 Java `planned` entries are stale. That was wrong. Under nq.dev's rule, `implemented` needs a test that exercises the binding against the oracle:
+   - Record types and fields stay `planned` by design.
+   - Most of the Go-shaped symbols (listers' `Err`/`Name`, `With*` option functions, `JSErrCode*`, Go `String`/`MarshalJSON`) have no exercised Java binding.
+
+   What *was* stale is the reason text, which still read "awaiting IR" for milestones that have all landed; it now says why each entry stays planned. Java's stream-level `PauseConsumer`/`ResumeConsumer`/`ResetConsumer`/`ResetConsumerToSequence` were implemented but unexercised. They now have evidence and are promoted, so Java's JetStream manifest is 398 implemented, up from 394. Read the "stale manifest" sections of the detailed reports with this correction in mind.
 
 ## Suggested order for a jnats-compatible facade
 
@@ -164,7 +168,6 @@ usual IR → vectors → shell route.
 2. **`Dispatcher` and the `CompletableFuture` request.** Other NQ targets already have async requests to model this on.
 3. **Behaviour that changes wire, statistics or policy:**
    - CONNECT flags, extra counters, outgoing-queue limits, `maxControlLine`, strict validation, resolve mode, force-close, drop-on-overflow;
-   - the service 500 reply;
    - the oracle-backed JetStream gaps in §1.
 
    Each needs IR, vectors and a recorded divergence where it departs from nats.go.

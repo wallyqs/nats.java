@@ -30,7 +30,7 @@ Path abbreviations:
   Gaps are API-shape only: jnats returns `ObjectInfo` from `updateMeta` / `delete` and `ObjectStoreStatus` from `seal`, where NQ returns void (nats.go shape). jnats also has a push `ObjectStoreWatcher`, builder and `toJson` objects, a `Headers` type and `ObjectStoreStatus.getConfiguration()`.
 - **Services: complete against nats.go micro** (manifest 117/121 implemented; the other 4 are justified `unsupported`). The real jnats-only gaps:
   1. The **`Discovery`** client (ping/info/stats across instances). NQ excluded it on purpose (SERVICES-PLAN.md:54, "nats.go has none").
-  2. **Auto-reply with error 500 when a handler throws.**
+  2. **Auto-reply with error 500 when a handler throws** (now fixed in `wallyqs/nq.dev` `fc1ef2c`; before, the exception stopped the service).
   3. **`drainTimeout`**, and `stop(drain=false)` / `stop(Throwable)` with a `CompletableFuture` from `startService()`.
   4. **Per-endpoint `Dispatcher`** and ping/info/stats dispatchers.
   5. **Per-endpoint `statsDataSupplier`**. NQ has a service-wide `StatsHandler(endpoint)`, so this is partial.
@@ -188,6 +188,9 @@ Path abbreviations:
 ---
 
 ## (d) Stale manifest entries
+
+> **Correction:** this section overstates the staleness. Most of these entries stay `planned` correctly under nq.dev's evidence rule; only the reason text was stale. See [README §5.3](README.md#5-problems-found-in-nqdev-now-fixed).
+
 
 1. **`ir/capabilities/jetstream/java.nio.json`** has 510 planned / 394 implemented. **71 planned rows sit in kv.go / object.go / kv_options.go / object_options.go, and all 71 are types or fields that exist in JetStream.java:**
    - `jetstream.KeyValue` (JS:4887), `KeyValueManager` (methods on Context, JS:1358-1382), `KeyValueConfig` and all 15 fields (JS:4339)

@@ -45,7 +45,7 @@ Every NQ status below was checked against the Java source, not the manifests.
   - public JSON (de)serialization of config/info objects. The Go `nq.go` facade has this; Java does not.
   - nats.go-style string names for enums
 - **Batch direct get (`multi_last` / `up_to_seq`) is missing in every NQ target.** It is not public API in jnats 2.26.x either: only the `MULTI_LAST` constant and an unused `directBatchGet211Available` flag exist. The oracle is orbit.go `jetstreamext/getbatch.go`.
-- **Possible error-code bug, not yet confirmed against a live server.** NQ copies orbit.go's fast-batch error codes: 10203 for not-enabled through 10206 for unknown-id. jnats uses 10205–10209 instead. The NASIR server model, which is derived from nats-server `stream.go`, also uses 10205/10206/10207/10208 (`wallyqs/nasir: ir/natsserver/jsapi.nasir:5345-5411`). NQ's 10203 and 10204 also collide with nats.go's `ScheduleSourceInvalid` (10203) and `ConsumerInvalidReset` (10204). This needs a live check.
+- **Error-code bug (confirmed on nats-server v2.15.0 and fixed in `wallyqs/nq.dev` `fc1ef2c`).** NQ copies orbit.go's fast-batch error codes: 10203 for not-enabled through 10206 for unknown-id. jnats uses 10205–10209 instead. The NASIR server model, which is derived from nats-server `stream.go`, also uses 10205/10206/10207/10208 (`wallyqs/nasir: ir/natsserver/jsapi.nasir:5345-5411`). NQ's 10203 and 10204 also collide with nats.go's `ScheduleSourceInvalid` (10203) and `ConsumerInvalidReset` (10204). This needs a live check.
 - **The capability manifests are badly out of date for Java.**
   - In `ir/capabilities/jetstream/java.nio.json` (and `java.threaded`), 311 in-scope symbols are marked `planned`. About 270 of them are present in `JetStream.java`: every struct type and field, the enums and their constants, every `JSErrCode*`, the option functions, pause/resume/reset and the listers.
   - In `ir/capabilities/orbit/java.nio.json`, 26 batch-publishing types and fields are marked `planned` but are implemented.
@@ -210,6 +210,9 @@ Every NQ status below was checked against the Java source, not the manifests.
 - `BatchAck` `JS:6627`, `FastPubAck` `JS:6934`
 
 ## (d) Where the capability manifests disagree with the source
+
+> **Correction:** this section overstates the staleness. Most of these entries stay `planned` correctly under nq.dev's evidence rule; only the reason text was stale. See [README §5.3](README.md#5-problems-found-in-nqdev-now-fixed).
+
 
 1. **`ir/capabilities/jetstream/java.nio.json` and `java.threaded.json`** list 510 symbols as `planned` and 394 as `implemented`. Every `implemented` binding was checked and exists in `JetStream.java`/`Client.java`; none is overstated. Of the 311 in-scope `planned` symbols (excluding KV, ObjectStore and consume types), about 270 are in fact present. The plan's own rule explains this: "Struct types and fields stay `planned` in the contract … evidence … not yet expressible in the field rule" (`docs/JETSTREAM-PLAN.md:870-872`). The manifest therefore understates Java's coverage. Out-of-date entries, by group:
    - **Records and every field:**

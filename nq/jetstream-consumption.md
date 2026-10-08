@@ -205,6 +205,9 @@ Errors:
 
 ## (d) Stale manifest entries (`ir/capabilities/jetstream/java.nio.json`)
 
+> **Correction:** this section overstates the staleness. Most of these entries stay `planned` correctly under nq.dev's evidence rule; only the reason text was stale. See [README §5.3](README.md#5-problems-found-in-nqdev-now-fixed).
+
+
 The manifest has `stage: evidence`, with 394 implemented and 510 planned symbols. The java.threaded, python, ruby, rust, ts and c manifests carry **identical** status sets, which suggests they are stamped from one template. The `planned` reasons still say "J4 (pull consumption): awaiting IR…" or "J5 (ordered and push consumers): awaiting IR…". However, docs/JETSTREAM-PLAN.md:1974 and :2277 (Java paragraph at :2425) record J4b and J5b as landed for Java.
 
 The following consumption-scope symbols are marked `planned` but exist in Java:
