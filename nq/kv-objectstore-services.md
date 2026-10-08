@@ -30,7 +30,7 @@ Path abbreviations:
   Gaps are API-shape only: jnats returns `ObjectInfo` from `updateMeta` / `delete` and `ObjectStoreStatus` from `seal`, where NQ returns void (nats.go shape). jnats also has a push `ObjectStoreWatcher`, builder and `toJson` objects, a `Headers` type and `ObjectStoreStatus.getConfiguration()`.
 - **Services: complete against nats.go micro** (manifest 117/121 implemented; the other 4 are justified `unsupported`). The real jnats-only gaps:
   1. The **`Discovery`** client (ping/info/stats across instances). NQ excluded it on purpose (SERVICES-PLAN.md:54, "nats.go has none").
-  2. **Auto-reply with error 500 when a handler throws** (now fixed in `wallyqs/nq.dev` `fc1ef2c`; before, the exception stopped the service).
+  2. **Auto-reply with error 500 when a handler throws** (now fixed in `wallyqs/nq.dev` `dda5e6c`; before, the exception stopped the service).
   3. **`drainTimeout`**, and `stop(drain=false)` / `stop(Throwable)` with a `CompletableFuture` from `startService()`.
   4. **Per-endpoint `Dispatcher`** and ping/info/stats dispatchers.
   5. **Per-endpoint `statsDataSupplier`**. NQ has a service-wide `StatsHandler(endpoint)`, so this is partial.
