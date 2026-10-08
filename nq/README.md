@@ -57,18 +57,26 @@ than IR derived from an oracle. The biggest gap is the legacy jnats
 These are table rows. A row can group a few related options, so the counts
 show relative size, not an exact feature count.
 
-## 1. Gaps an oracle has (oracle-backed IR work)
+## 1. Gaps beyond NQ's JetStream oracle
 
-nats.go or orbit.go has each of these, so NQ can derive them through the
-usual IR → vectors → shell route.
+NQ's JetStream oracle is the `nats.go/jetstream` package. Only the first
+item below is in an oracle NQ uses (orbit.go). The rest match
+`nats.go/jetstream` exactly: nats.go lacks them too. Some come from fields
+the server sends that only jnats, or legacy nats.go (`jsm.go`), exposes.
+Adding them would be a deliberate extension, checked against a live server
+rather than nats.go.
 
-- **Batch direct get** (`multi_last`, `up_to_seq`). The oracle is orbit.go `jetstreamext/getbatch.go`. 14–18 orbit symbols are correctly marked `planned`. No NQ target has it, and jnats 2.26 has only a flag and a constant.
-- **Get-first-message by start time.** The direct-get request struct has no `start_time` field, so this needs IR. nats.go has `WithGetMsgSubject` and start-time get requests.
-- **Missing info fields:**
-  - `StreamInfo.alternates`, `StreamState.lost`, `ConsumerInfo.calculatedPending`;
-  - source and mirror info: `external` and `error`.
-- **Purge result.** Purge returns `void`, although the purged count is decoded and then dropped. This is the cheapest fix.
-- **Typed direct-get result.** It has no stream, lastSeq or numPending fields; the values sit only in the raw header map. NQ also has no generic `MessageGetRequest`, only fixed get methods.
+- **Batch direct get** (`multi_last`, `up_to_seq`, `start_time`). The oracle is orbit.go `jetstreamext/getbatch.go`. 14–18 orbit symbols are correctly marked `planned`. No NQ target has it, and jnats 2.26 has only a flag and a constant.
+- **First message by start time** (jnats `getFirstMessage(stream, ZonedDateTime[, subject])`). The server takes `start_time` in a message-get request (`server/jetstream_api.go:837`). The `nats.go/jetstream` request has only `seq`, `last_by_subj` and `next_by_subj` (`jetstream/stream.go:259-263`), and so does NQ's. orbit.go offers start time only for batch get.
+- **Info fields the server sends but `nats.go/jetstream` drops:**
+  - `StreamInfo.alternates` (`server/stream.go:353`; legacy `jsm.go:1059` only);
+  - `StreamState.lost` (`server/store.go:183`; in no nats.go);
+  - source and mirror `external` and `error` (`server/stream.go:481`; legacy `jsm.go:1075-1076` only).
+
+  Each needs a field in the IR's info records.
+- **`ConsumerInfo.calculatedPending`.** A jnats convenience, not a server field: `numPending + delivered.consumerSeq`.
+- **Purge result.** The server replies with `purged`, and `nats.go/jetstream` decodes it (`stream.go:207`) but returns only an error, as NQ's `void` purge does. jnats returns a `PurgeResponse`. The count is already decoded in NQ, so this is the cheapest extension.
+- **Typed direct-get result.** A direct get's `Nats-Num-Pending`, `Nats-Last-Sequence` and `Nats-Stream` headers stay in the raw header map, as in nats.go's `RawStreamMsg`. jnats `MessageInfo` exposes them as typed fields. NQ also has no generic `MessageGetRequest`, only fixed get methods.
 - **Legacy `js.go` push/pull subscribe**, which nats.go has only in `js.go`, not in `jetstream/`. NQ already has `LegacyOrdered` internally (JetStream.java:5238), used by KV and Object Store, and could build on it.
 - **Public JSON for config and info objects**, with nats.go enum names. The Go facade (`nq.go`) has it; no other target does.
 
@@ -168,7 +176,7 @@ All three are fixed on `wallyqs/nq.dev`: the error codes on `dev` (`cefee41`), t
 2. **`Dispatcher` and the `CompletableFuture` request.** Other NQ targets already have async requests to model this on.
 3. **Behaviour that changes wire, statistics or policy:**
    - CONNECT flags, extra counters, outgoing-queue limits, `maxControlLine`, strict validation, resolve mode, force-close, drop-on-overflow;
-   - the oracle-backed JetStream gaps in §1.
+   - the JetStream extensions in §1.
 
    Each needs IR, vectors and a recorded divergence where it departs from nats.go.
 4. **Legacy `JetStream.subscribe`**, if the facade has to support it. It is the largest single block, and its only oracle is nats.go `js.go`.
